@@ -44,7 +44,7 @@ jobs:
           URL="https://maven.pkg.github.com/${GITHUB_REPOSITORY}/org/example/todo-app/${VERSION}/todo-app-${VERSION}.pom"
           CODE=$(curl -s -o /dev/null -w '%{http_code}' -u "${GITHUB_ACTOR}:${GITHUB_TOKEN}" "$URL")
           echo "Version ${VERSION} -> Maven answered ${CODE}"
-          if [ "$CODE" = "200" ]; then
+          if [ "$CODE" = "200" ] || [ "$CODE" = "302" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
