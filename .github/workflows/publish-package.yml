@@ -17,6 +17,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      GITHUB_ACTOR: ${{ github.actor }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
 
     steps:
       - name: Checkout
@@ -33,9 +37,29 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Check whether the version is already published
+        id: check
+        run: |
+          VERSION=$(grep -E '^version=' gradle.properties | head -n 1 | cut -d'=' -f2 | tr -d '[:space:]')
+          URL="https://maven.pkg.github.com/${GITHUB_REPOSITORY}/org/example/todo-app/${VERSION}/todo-app-${VERSION}.pom"
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -u "${GITHUB_ACTOR}:${GITHUB_TOKEN}" "$URL")
+          echo "Version ${VERSION} -> Maven answered ${CODE}"
+          if [ "$CODE" = "200" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish package
+        if: steps.check.outputs.exists != 'true'
         run: ./gradlew --no-daemon publish
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Skip notice
+        if: steps.check.outputs.exists == 'true'
+        run: echo "Version is already published, nothing to upload."
+
+      - name: Make package public
+        if: steps.check.outputs.exists != 'true'
+        run: |
+          gh api --method PATCH "/users/${GITHUB_REPOSITORY_OWNER}/packages/maven/todo-app/visibility" \
+            -f visibility=public || true
