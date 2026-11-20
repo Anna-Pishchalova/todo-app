@@ -1,4 +1,4 @@
-name: CI
+name: CI / Build & Release
 
 on:
   push:
@@ -16,7 +16,7 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
 
     steps:
       - name: Checkout
@@ -41,7 +41,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Build and test
+      - name: Read project version
+        id: get_version
+        run: |
+          VERSION=$(grep -E '^version=' gradle.properties | head -n 1 | cut -d'=' -f2 | tr -d '[:space:]')
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Project version: $VERSION"
+
+      - name: Build (run tests and create fat JAR)
         run: ./gradlew --no-daemon clean build
 
       - name: Upload test report
@@ -51,3 +58,16 @@ jobs:
           name: test-report
           path: build/reports/tests/test
           if-no-files-found: ignore
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.VERSION }}
+          name: Release v${{ steps.get_version.outputs.VERSION }}
+          body: |
+            Automated release for version ${{ steps.get_version.outputs.VERSION }}.
+            Commit: ${{ github.sha }}
+          files: build/libs/todo-app-${{ steps.get_version.outputs.VERSION }}.jar
+          draft: false
+          prerelease: false
